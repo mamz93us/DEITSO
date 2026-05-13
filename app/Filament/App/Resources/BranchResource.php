@@ -6,94 +6,105 @@ namespace App\Filament\App\Resources;
 
 use App\Filament\App\Resources\BranchResource\Pages;
 use App\Models\Branch;
-use Filament\Forms;
+use Filament\Forms\Components\KeyValue;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
+use Filament\Resources\Concerns\Translatable;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Tables\Actions\BulkActionGroup;
+use Filament\Tables\Actions\DeleteAction;
+use Filament\Tables\Actions\DeleteBulkAction;
+use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class BranchResource extends Resource
 {
+    use Translatable;
+
     protected static ?string $model = Branch::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-map-pin';
+
+    protected static ?int $navigationSort = 20;
 
     public static function form(Form $form): Form
     {
-        return $form
-            ->schema([
-                Forms\Components\Select::make('organization_id')
-                    ->relationship('organization', 'name')
-                    ->required(),
-                Forms\Components\Textarea::make('name')
-                    ->required()
-                    ->columnSpanFull(),
-                Forms\Components\TextInput::make('code')
-                    ->required()
-                    ->maxLength(32),
-                Forms\Components\Textarea::make('address')
-                    ->columnSpanFull(),
-                Forms\Components\TextInput::make('lat')
-                    ->numeric()
-                    ->default(null),
-                Forms\Components\TextInput::make('lng')
-                    ->numeric()
-                    ->default(null),
-                Forms\Components\Toggle::make('is_primary')
-                    ->required(),
-            ]);
+        return $form->schema([
+            Section::make('Branch')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('name')
+                        ->label('Branch name')
+                        ->required()
+                        ->maxLength(255)
+                        ->translatable()
+                        ->columnSpan(1),
+
+                    TextInput::make('code')
+                        ->label('Code')
+                        ->helperText('Short code used in asset IDs, e.g. CAI, ALX')
+                        ->required()
+                        ->alphaDash()
+                        ->maxLength(32)
+                        ->columnSpan(1),
+
+                    Toggle::make('is_primary')
+                        ->label('Primary branch')
+                        ->helperText('Marks this as the organization\'s main branch')
+                        ->inline(false)
+                        ->columnSpanFull(),
+                ]),
+
+            Section::make('Address & coordinates')
+                ->columns(2)
+                ->collapsed()
+                ->schema([
+                    KeyValue::make('address')
+                        ->keyLabel('Field')
+                        ->valueLabel('Value')
+                        ->keyPlaceholder('street, city, country, postal_code')
+                        ->columnSpanFull(),
+
+                    TextInput::make('lat')
+                        ->label('Latitude')
+                        ->numeric()
+                        ->step('0.0000001')
+                        ->columnSpan(1),
+
+                    TextInput::make('lng')
+                        ->label('Longitude')
+                        ->numeric()
+                        ->step('0.0000001')
+                        ->columnSpan(1),
+                ]),
+        ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')
-                    ->label('ID')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('organization.name')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('code')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('lat')
-                    ->numeric()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('lng')
-                    ->numeric()
-                    ->sortable(),
-                Tables\Columns\IconColumn::make('is_primary')
-                    ->boolean(),
-                Tables\Columns\TextColumn::make('deleted_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->filters([
-                //
+                TextColumn::make('name')->searchable()->sortable(),
+                TextColumn::make('code')->badge()->searchable(),
+                IconColumn::make('is_primary')->boolean()->sortable()->label('Primary'),
+                TextColumn::make('lat')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('lng')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->dateTime()->since()->toggleable(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
-            ]);
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            //
-        ];
+            ])
+            ->defaultSort('is_primary', 'desc');
     }
 
     public static function getPages(): array

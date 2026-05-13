@@ -6,8 +6,11 @@ namespace App\Filament\App\Resources\BranchResource\Pages;
 
 use App\Filament\App\Resources\BranchResource;
 use Filament\Resources\Pages\CreateRecord;
+use Filament\Resources\Pages\CreateRecord\Concerns\Translatable;
 
 class CreateBranch extends CreateRecord
 {
+    use Translatable;
+
     protected static string $resource = BranchResource::class;
 }

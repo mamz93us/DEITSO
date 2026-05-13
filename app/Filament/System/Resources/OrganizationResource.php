@@ -6,76 +6,134 @@ namespace App\Filament\System\Resources;
 
 use App\Filament\System\Resources\OrganizationResource\Pages;
 use App\Models\Organization;
-use Filament\Forms;
+use Filament\Forms\Components\KeyValue;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
+use Filament\Resources\Concerns\Translatable;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Tables\Actions\BulkActionGroup;
+use Filament\Tables\Actions\DeleteAction;
+use Filament\Tables\Actions\DeleteBulkAction;
+use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Columns\BadgeColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 
 class OrganizationResource extends Resource
 {
+    use Translatable;
+
     protected static ?string $model = Organization::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-building-office-2';
+
+    protected static ?int $navigationSort = 10;
 
     public static function form(Form $form): Form
     {
-        return $form
-            ->schema([
-                Forms\Components\Textarea::make('name')
-                    ->required()
-                    ->columnSpanFull(),
-                Forms\Components\TextInput::make('slug')
-                    ->required()
-                    ->maxLength(64),
-                Forms\Components\Textarea::make('settings')
-                    ->columnSpanFull(),
-                Forms\Components\TextInput::make('status')
-                    ->required(),
-            ]);
+        return $form->schema([
+            Section::make('Organization')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('name')
+                        ->label('Display name')
+                        ->required()
+                        ->maxLength(255)
+                        ->translatable()
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            if (! $get('slug') && is_array($state) && ! empty($state['en'])) {
+                                $set('slug', Str::slug($state['en']));
+                            }
+                        })
+                        ->columnSpan(1),
+
+                    TextInput::make('slug')
+                        ->label('URL slug')
+                        ->helperText('Used as the platform subdomain — e.g. samirgroup.it.deevar.cloud')
+                        ->required()
+                        ->maxLength(64)
+                        ->regex('/^[a-z0-9-]+$/')
+                        ->unique(ignoreRecord: true)
+                        ->columnSpan(1),
+
+                    Select::make('status')
+                        ->options([
+                            'active' => 'Active',
+                            'pending' => 'Pending',
+                            'suspended' => 'Suspended',
+                        ])
+                        ->default('active')
+                        ->required()
+                        ->columnSpan(1),
+                ]),
+
+            Section::make('Settings')
+                ->description('Org-wide preferences. Leave empty to use platform defaults.')
+                ->collapsed()
+                ->schema([
+                    KeyValue::make('settings')
+                        ->keyLabel('Key')
+                        ->valueLabel('Value')
+                        ->reorderable()
+                        ->columnSpanFull(),
+                ]),
+        ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')
-                    ->label('ID')
+                TextColumn::make('name')
+                    ->label('Name')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('slug')
+                    ->badge()
+                    ->copyable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('slug')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('status'),
-                Tables\Columns\TextColumn::make('deleted_at')
-                    ->dateTime()
+                BadgeColumn::make('status')
+                    ->colors([
+                        'success' => 'active',
+                        'warning' => 'pending',
+                        'danger' => 'suspended',
+                    ]),
+                TextColumn::make('branches_count')
+                    ->counts('branches')
+                    ->label('Branches')
+                    ->sortable(),
+                TextColumn::make('users_count')
+                    ->counts('users')
+                    ->label('Users')
+                    ->sortable(),
+                TextColumn::make('created_at')
+                    ->dateTime('Y-m-d H:i')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
             ])
             ->filters([
-                //
+                SelectFilter::make('status')
+                    ->options([
+                        'active' => 'Active',
+                        'pending' => 'Pending',
+                        'suspended' => 'Suspended',
+                    ]),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
-            ]);
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            //
-        ];
+            ])
+            ->defaultSort('created_at', 'desc');
     }
 
     public static function getPages(): array
