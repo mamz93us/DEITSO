@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\App\Resources;
 
 use App\Actions\Assets\AssignAssetToEmployee;
+use App\Actions\Assets\AssignLicenseSeat;
 use App\Actions\Assets\RevokeAssetFromEmployee;
 use App\Actions\Assets\ScrapAsset;
 use App\Actions\Assets\TransferAsset;
 use App\Filament\App\Resources\AssetResource\Pages;
 use App\Filament\App\Resources\AssetResource\RelationManagers\AssignmentsRelationManager;
+use App\Filament\App\Resources\AssetResource\RelationManagers\LicenseSeatsRelationManager;
 use App\Filament\App\Resources\AssetResource\RelationManagers\RemoteAccessRelationManager;
 use App\Filament\App\Resources\AssetResource\RelationManagers\TransfersRelationManager;
 use App\Models\Asset;
@@ -27,6 +29,7 @@ use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables\Actions\Action;
@@ -142,6 +145,46 @@ class AssetResource extends Resource
                         ->columnSpan(1),
                 ]),
 
+            Section::make('License details')
+                ->columns(2)
+                ->visible(function (callable $get) {
+                    $categoryId = $get('category_id');
+                    if (! $categoryId) {
+                        return false;
+                    }
+                    $cat = AssetCategory::find($categoryId);
+
+                    return $cat?->tracking_mode === AssetCategory::TRACKING_LICENSE;
+                })
+                ->schema([
+                    TextInput::make('license_key_encrypted')
+                        ->label('License key')
+                        ->password()
+                        ->revealable()
+                        ->helperText('Stored encrypted at rest.')
+                        ->columnSpanFull(),
+
+                    TextInput::make('seats_total')
+                        ->label('Total seats')
+                        ->numeric()
+                        ->minValue(1)
+                        ->columnSpan(1),
+
+                    DatePicker::make('expiry_date')
+                        ->label('Expiry date')
+                        ->columnSpan(1),
+
+                    Toggle::make('renewable')
+                        ->label('Renewable')
+                        ->inline(false)
+                        ->columnSpan(1),
+
+                    Toggle::make('auto_renewal')
+                        ->label('Auto-renews')
+                        ->inline(false)
+                        ->columnSpan(1),
+                ]),
+
             Section::make('Procurement & cost')
                 ->columns(2)
                 ->collapsed()
@@ -197,6 +240,15 @@ class AssetResource extends Resource
                 TextColumn::make('branch.name')->label('Branch')->toggleable(),
                 TextColumn::make('supplier.name')->label('Supplier')->toggleable(),
                 TextColumn::make('warranty_until')->date()->toggleable(),
+                TextColumn::make('expiry_date')
+                    ->date()
+                    ->label('License expiry')
+                    ->color(fn (Asset $a) => $a->is_expired ? 'danger' : ($a->is_expiring_soon ? 'warning' : null))
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('seats_used')
+                    ->label('Seats')
+                    ->state(fn (Asset $a) => $a->is_license ? $a->seats_used.' / '.($a->seats_total ?? '∞') : '—')
+                    ->toggleable(),
             ])
             ->filters([
                 SelectFilter::make('status')->options([
@@ -218,7 +270,8 @@ class AssetResource extends Resource
                 Action::make('assign')
                     ->icon('heroicon-o-user-plus')
                     ->color('primary')
-                    ->visible(fn (Asset $a) => ! in_array($a->status, [Asset::STATUS_SCRAPPED, Asset::STATUS_LOST], true))
+                    ->visible(fn (Asset $a) => ! $a->is_license
+                        && ! in_array($a->status, [Asset::STATUS_SCRAPPED, Asset::STATUS_LOST], true))
                     ->form([
                         Select::make('employee_id')
                             ->label('Employee')
@@ -254,7 +307,8 @@ class AssetResource extends Resource
                 Action::make('transfer')
                     ->icon('heroicon-o-arrows-right-left')
                     ->color('info')
-                    ->visible(fn (Asset $a) => ! in_array($a->status, [Asset::STATUS_SCRAPPED, Asset::STATUS_LOST], true))
+                    ->visible(fn (Asset $a) => ! $a->is_license
+                        && ! in_array($a->status, [Asset::STATUS_SCRAPPED, Asset::STATUS_LOST], true))
                     ->form([
                         Select::make('to_employee_id')
                             ->label('Transfer to employee')
@@ -279,6 +333,30 @@ class AssetResource extends Resource
                         $transfer->state->transitionTo(Pending::class);
                         $transfer->state->transitionTo(Approved::class);
                         $svc->complete($transfer);
+                    }),
+
+                Action::make('assign_seat')
+                    ->icon('heroicon-o-user-plus')
+                    ->color('primary')
+                    ->label('Assign seat')
+                    ->visible(fn (Asset $a) => $a->is_license && ! $a->is_expired)
+                    ->form([
+                        Select::make('employee_id')
+                            ->label('Employee')
+                            ->options(fn () => Employee::query()
+                                ->where('status', '!=', Employee::STATUS_TERMINATED)
+                                ->get()
+                                ->mapWithKeys(fn ($e) => [$e->id => $e->full_name.' ('.$e->code.')']))
+                            ->required()
+                            ->searchable(),
+                        TextInput::make('reason')->placeholder('Optional note'),
+                    ])
+                    ->action(function (Asset $asset, array $data) {
+                        app(AssignLicenseSeat::class)(
+                            $asset,
+                            Employee::findOrFail($data['employee_id']),
+                            $data['reason'] ?? null,
+                        );
                     }),
 
                 Action::make('print_label')
@@ -350,6 +428,7 @@ class AssetResource extends Resource
     public static function getRelations(): array
     {
         return [
+            LicenseSeatsRelationManager::class,
             AssignmentsRelationManager::class,
             RemoteAccessRelationManager::class,
             TransfersRelationManager::class,

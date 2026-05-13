@@ -63,6 +63,16 @@ class Asset extends Model
         'depreciation_months',
         'custom_fields',
         'notes',
+        // License-specific
+        'license_key_encrypted',
+        'seats_total',
+        'expiry_date',
+        'renewable',
+        'auto_renewal',
+    ];
+
+    protected $hidden = [
+        'license_key_encrypted',
     ];
 
     protected function casts(): array
@@ -74,7 +84,44 @@ class Asset extends Model
             'quantity' => 'integer',
             'purchase_cost_minor' => 'integer',
             'depreciation_months' => 'integer',
+            // License-specific
+            'license_key_encrypted' => 'encrypted',
+            'seats_total' => 'integer',
+            'expiry_date' => 'date',
+            'renewable' => 'boolean',
+            'auto_renewal' => 'boolean',
         ];
+    }
+
+    public function getSeatsUsedAttribute(): int
+    {
+        return (int) $this->assignments()->whereNull('to_at')->count();
+    }
+
+    public function getSeatsAvailableAttribute(): ?int
+    {
+        if ($this->seats_total === null) {
+            return null;
+        }
+
+        return max(0, $this->seats_total - $this->seats_used);
+    }
+
+    public function getIsLicenseAttribute(): bool
+    {
+        return $this->tracking_mode === AssetCategory::TRACKING_LICENSE;
+    }
+
+    public function getIsExpiringSoonAttribute(): bool
+    {
+        return $this->expiry_date !== null
+            && $this->expiry_date->isFuture()
+            && now()->diffInDays($this->expiry_date, false) <= 30;
+    }
+
+    public function getIsExpiredAttribute(): bool
+    {
+        return $this->expiry_date !== null && $this->expiry_date->isPast();
     }
 
     public function getActivitylogOptions(): LogOptions
