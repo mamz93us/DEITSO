@@ -30,7 +30,9 @@ class OrganizationDomainResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-link';
 
-    protected static ?int $navigationSort = 30;
+    protected static ?string $navigationGroup = 'Settings';
+
+    protected static ?int $navigationSort = 20;
 
     protected static ?string $navigationLabel = 'Domains';
 
