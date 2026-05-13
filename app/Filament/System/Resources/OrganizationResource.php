@@ -41,13 +41,13 @@ class OrganizationResource extends Resource
                 ->schema([
                     TextInput::make('name')
                         ->label('Display name')
+                        ->helperText('Use the locale switcher (top-right) to enter Arabic.')
                         ->required()
                         ->maxLength(255)
-                        ->translatable()
                         ->live(onBlur: true)
                         ->afterStateUpdated(function ($state, callable $set, callable $get) {
-                            if (! $get('slug') && is_array($state) && ! empty($state['en'])) {
-                                $set('slug', Str::slug($state['en']));
+                            if (! $get('slug') && is_string($state) && $state !== '') {
+                                $set('slug', Str::slug($state));
                             }
                         })
                         ->columnSpan(1),

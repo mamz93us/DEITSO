@@ -39,9 +39,9 @@ class BranchResource extends Resource
                 ->schema([
                     TextInput::make('name')
                         ->label('Branch name')
+                        ->helperText('Use the locale switcher (top-right) to enter Arabic.')
                         ->required()
                         ->maxLength(255)
-                        ->translatable()
                         ->columnSpan(1),
 
                     TextInput::make('code')
