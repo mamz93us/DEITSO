@@ -8,6 +8,8 @@ use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -115,5 +117,30 @@ class Asset extends Model
     public function assignedBranch(): BelongsTo
     {
         return $this->belongsTo(Branch::class, 'assigned_branch_id');
+    }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(AssetAssignment::class)->latest('from_at');
+    }
+
+    public function currentAssignment(): HasOne
+    {
+        return $this->hasOne(AssetAssignment::class)->whereNull('to_at')->latestOfMany('from_at');
+    }
+
+    public function transfers(): HasMany
+    {
+        return $this->hasMany(AssetTransfer::class)->latest();
+    }
+
+    public function scraps(): HasMany
+    {
+        return $this->hasMany(AssetScrap::class);
+    }
+
+    public function remoteAccess(): HasMany
+    {
+        return $this->hasMany(AssetRemoteAccess::class);
     }
 }

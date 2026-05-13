@@ -4,12 +4,21 @@ declare(strict_types=1);
 
 namespace App\Filament\App\Resources;
 
+use App\Actions\Assets\AssignAssetToEmployee;
+use App\Actions\Assets\RevokeAssetFromEmployee;
+use App\Actions\Assets\ScrapAsset;
+use App\Actions\Assets\TransferAsset;
 use App\Filament\App\Resources\AssetResource\Pages;
+use App\Filament\App\Resources\AssetResource\RelationManagers\AssignmentsRelationManager;
+use App\Filament\App\Resources\AssetResource\RelationManagers\RemoteAccessRelationManager;
+use App\Filament\App\Resources\AssetResource\RelationManagers\TransfersRelationManager;
 use App\Models\Asset;
 use App\Models\AssetCategory;
 use App\Models\AssetModel;
 use App\Models\Branch;
 use App\Models\Employee;
+use App\Models\States\AssetTransfer\Approved;
+use App\Models\States\AssetTransfer\Pending;
 use App\Models\Supplier;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\KeyValue;
@@ -19,6 +28,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
+use Filament\Tables\Actions\Action;
 use Filament\Tables\Actions\BulkActionGroup;
 use Filament\Tables\Actions\DeleteAction;
 use Filament\Tables\Actions\DeleteBulkAction;
@@ -200,9 +210,118 @@ class AssetResource extends Resource
                 SelectFilter::make('branch_id')->label('Branch')
                     ->options(fn () => Branch::query()->get()->mapWithKeys(fn ($b) => [$b->id => $b->name])),
             ])
-            ->actions([EditAction::make(), DeleteAction::make()])
+            ->actions([
+                EditAction::make(),
+
+                Action::make('assign')
+                    ->icon('heroicon-o-user-plus')
+                    ->color('primary')
+                    ->visible(fn (Asset $a) => ! in_array($a->status, [Asset::STATUS_SCRAPPED, Asset::STATUS_LOST], true))
+                    ->form([
+                        Select::make('employee_id')
+                            ->label('Employee')
+                            ->options(fn () => Employee::query()
+                                ->where('status', '!=', Employee::STATUS_TERMINATED)
+                                ->get()
+                                ->mapWithKeys(fn ($e) => [$e->id => $e->full_name.' ('.$e->code.')']))
+                            ->required()
+                            ->searchable(),
+                        TextInput::make('reason')->placeholder('Optional note'),
+                    ])
+                    ->action(function (Asset $asset, array $data) {
+                        app(AssignAssetToEmployee::class)(
+                            $asset,
+                            Employee::findOrFail($data['employee_id']),
+                            $data['reason'] ?? null,
+                        );
+                    }),
+
+                Action::make('revoke')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('warning')
+                    ->visible(fn (Asset $a) => $a->assigned_employee_id !== null)
+                    ->requiresConfirmation()
+                    ->modalHeading('Return asset to stock')
+                    ->form([
+                        TextInput::make('reason')->placeholder('Optional reason'),
+                    ])
+                    ->action(function (Asset $asset, array $data) {
+                        app(RevokeAssetFromEmployee::class)($asset, $data['reason'] ?? null);
+                    }),
+
+                Action::make('transfer')
+                    ->icon('heroicon-o-arrows-right-left')
+                    ->color('info')
+                    ->visible(fn (Asset $a) => ! in_array($a->status, [Asset::STATUS_SCRAPPED, Asset::STATUS_LOST], true))
+                    ->form([
+                        Select::make('to_employee_id')
+                            ->label('Transfer to employee')
+                            ->options(fn () => Employee::query()
+                                ->where('status', '!=', Employee::STATUS_TERMINATED)
+                                ->get()
+                                ->mapWithKeys(fn ($e) => [$e->id => $e->full_name.' ('.$e->code.')']))
+                            ->searchable()
+                            ->nullable(),
+                        Select::make('to_branch_id')
+                            ->label('…or transfer to branch')
+                            ->options(fn () => Branch::query()->get()->mapWithKeys(fn ($b) => [$b->id => $b->name]))
+                            ->searchable()
+                            ->nullable(),
+                        Textarea::make('reason')->rows(2),
+                    ])
+                    ->action(function (Asset $asset, array $data) {
+                        $svc = app(TransferAsset::class);
+                        $transfer = $svc->create($asset, $data);
+                        // Auto-approve + complete in this simple flow — full
+                        // approval workflow lands when EmployeeRequest ties in (Sprint 7).
+                        $transfer->state->transitionTo(Pending::class);
+                        $transfer->state->transitionTo(Approved::class);
+                        $svc->complete($transfer);
+                    }),
+
+                Action::make('scrap')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->visible(fn (Asset $a) => $a->status !== Asset::STATUS_SCRAPPED)
+                    ->requiresConfirmation()
+                    ->modalHeading('Scrap asset')
+                    ->modalDescription('Removes the asset from active use. Historical data is preserved.')
+                    ->form([
+                        Select::make('reason')
+                            ->options([
+                                'end_of_life' => 'End of life',
+                                'damaged' => 'Damaged',
+                                'lost' => 'Lost',
+                                'sold' => 'Sold',
+                                'donated' => 'Donated',
+                                'other' => 'Other',
+                            ])
+                            ->default('end_of_life')
+                            ->required(),
+                        TextInput::make('disposal_method')->placeholder('e.g. recycled via vendor'),
+                        TextInput::make('residual_value_minor')
+                            ->label('Residual value (minor units)')
+                            ->numeric()
+                            ->minValue(0),
+                        Textarea::make('notes')->rows(2),
+                    ])
+                    ->action(function (Asset $asset, array $data) {
+                        app(ScrapAsset::class)($asset, $data);
+                    }),
+
+                DeleteAction::make(),
+            ])
             ->bulkActions([BulkActionGroup::make([DeleteBulkAction::make()])])
             ->defaultSort('code', 'desc');
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            AssignmentsRelationManager::class,
+            RemoteAccessRelationManager::class,
+            TransfersRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
