@@ -1,0 +1,216 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Filament\App\Resources;
+
+use App\Filament\App\Resources\AssetResource\Pages;
+use App\Models\Asset;
+use App\Models\AssetCategory;
+use App\Models\AssetModel;
+use App\Models\Branch;
+use App\Models\Employee;
+use App\Models\Supplier;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\KeyValue;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
+use Filament\Tables\Actions\BulkActionGroup;
+use Filament\Tables\Actions\DeleteAction;
+use Filament\Tables\Actions\DeleteBulkAction;
+use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Columns\BadgeColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+class AssetResource extends Resource
+{
+    protected static ?string $model = Asset::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-cpu-chip';
+
+    protected static ?string $navigationGroup = 'ITAM';
+
+    protected static ?int $navigationSort = 40;
+
+    protected static ?string $recordTitleAttribute = 'code';
+
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            Section::make('Identity')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('code')
+                        ->label('Asset code')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->placeholder('Auto-generated on save (e.g. SMR-CAI-LAP-0001)')
+                        ->columnSpan(1),
+
+                    Select::make('category_id')
+                        ->label('Category')
+                        ->options(fn () => AssetCategory::query()->get()->mapWithKeys(fn ($c) => [$c->id => $c->name]))
+                        ->required()
+                        ->searchable()
+                        ->live()
+                        ->columnSpan(1),
+
+                    Select::make('asset_model_id')
+                        ->label('Model (catalog)')
+                        ->options(fn (callable $get) => AssetModel::query()
+                            ->when($get('category_id'), fn ($q, $id) => $q->where('category_id', $id))
+                            ->get()
+                            ->mapWithKeys(fn ($m) => [$m->id => trim($m->manufacturer.' '.$m->model_name)]))
+                        ->searchable()
+                        ->nullable()
+                        ->columnSpan(1),
+
+                    TextInput::make('name')
+                        ->label('Display name (override)')
+                        ->placeholder('Leave empty to use the model name')
+                        ->maxLength(255)
+                        ->columnSpan(1),
+
+                    TextInput::make('serial_number')
+                        ->maxLength(255)
+                        ->columnSpan(1),
+
+                    TextInput::make('quantity')
+                        ->numeric()
+                        ->minValue(1)
+                        ->default(1)
+                        ->columnSpan(1),
+                ]),
+
+            Section::make('Status & assignment')
+                ->columns(2)
+                ->schema([
+                    Select::make('status')
+                        ->options([
+                            Asset::STATUS_IN_STOCK => 'In stock',
+                            Asset::STATUS_DEPLOYED => 'Deployed',
+                            Asset::STATUS_IN_MAINTENANCE => 'In maintenance',
+                            Asset::STATUS_RETIRED => 'Retired',
+                            Asset::STATUS_SCRAPPED => 'Scrapped',
+                            Asset::STATUS_LOST => 'Lost',
+                        ])
+                        ->default(Asset::STATUS_IN_STOCK)
+                        ->required()
+                        ->columnSpan(1),
+
+                    Select::make('branch_id')
+                        ->label('Home branch')
+                        ->options(fn () => Branch::query()->get()->mapWithKeys(fn ($b) => [$b->id => $b->name]))
+                        ->searchable()
+                        ->nullable()
+                        ->columnSpan(1),
+
+                    Select::make('assigned_employee_id')
+                        ->label('Assigned to (employee)')
+                        ->helperText('For deployed assets. Full assignment history comes in Sprint 4.')
+                        ->options(fn () => Employee::query()
+                            ->where('status', '!=', Employee::STATUS_TERMINATED)
+                            ->get()
+                            ->mapWithKeys(fn ($e) => [$e->id => $e->full_name.' ('.$e->code.')']))
+                        ->searchable()
+                        ->nullable()
+                        ->columnSpan(1),
+
+                    Select::make('assigned_branch_id')
+                        ->label('Assigned to (branch)')
+                        ->options(fn () => Branch::query()->get()->mapWithKeys(fn ($b) => [$b->id => $b->name]))
+                        ->searchable()
+                        ->nullable()
+                        ->columnSpan(1),
+                ]),
+
+            Section::make('Procurement & cost')
+                ->columns(2)
+                ->collapsed()
+                ->schema([
+                    Select::make('supplier_id')
+                        ->options(fn () => Supplier::query()->get()->mapWithKeys(fn ($s) => [$s->id => $s->name]))
+                        ->searchable()
+                        ->nullable()
+                        ->columnSpan(1),
+
+                    TextInput::make('purchase_order_reference')->maxLength(255)->columnSpan(1),
+                    DatePicker::make('purchase_date')->columnSpan(1),
+                    TextInput::make('purchase_cost_minor')
+                        ->label('Purchase cost (minor units)')
+                        ->numeric()
+                        ->minValue(0)
+                        ->columnSpan(1),
+
+                    TextInput::make('currency')->default('EGP')->maxLength(3)->columnSpan(1),
+                    DatePicker::make('warranty_until')->columnSpan(1),
+                    TextInput::make('vendor')->maxLength(255)->columnSpan(1),
+                ]),
+
+            Section::make('Custom fields & notes')
+                ->collapsed()
+                ->schema([
+                    KeyValue::make('custom_fields')->columnSpanFull(),
+                    Textarea::make('notes')->rows(3)->columnSpanFull(),
+                ]),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('code')->badge()->searchable()->sortable(),
+                TextColumn::make('name')
+                    ->formatStateUsing(fn (Asset $a) => $a->name ?: ($a->assetModel?->model_name ?? '—'))
+                    ->label('Name'),
+                TextColumn::make('category.name')->label('Category')->toggleable(),
+                TextColumn::make('serial_number')->toggleable()->searchable(),
+                BadgeColumn::make('status')
+                    ->colors([
+                        'success' => Asset::STATUS_IN_STOCK,
+                        'primary' => Asset::STATUS_DEPLOYED,
+                        'warning' => [Asset::STATUS_IN_MAINTENANCE, Asset::STATUS_RETIRED],
+                        'danger' => [Asset::STATUS_SCRAPPED, Asset::STATUS_LOST],
+                    ]),
+                TextColumn::make('assignedEmployee.first_name')->label('Holder')
+                    ->formatStateUsing(fn ($state, Asset $a) => $a->assignedEmployee?->full_name ?? '—')
+                    ->toggleable(),
+                TextColumn::make('branch.name')->label('Branch')->toggleable(),
+                TextColumn::make('supplier.name')->label('Supplier')->toggleable(),
+                TextColumn::make('warranty_until')->date()->toggleable(),
+            ])
+            ->filters([
+                SelectFilter::make('status')->options([
+                    Asset::STATUS_IN_STOCK => 'In stock',
+                    Asset::STATUS_DEPLOYED => 'Deployed',
+                    Asset::STATUS_IN_MAINTENANCE => 'In maintenance',
+                    Asset::STATUS_RETIRED => 'Retired',
+                    Asset::STATUS_SCRAPPED => 'Scrapped',
+                    Asset::STATUS_LOST => 'Lost',
+                ]),
+                SelectFilter::make('category_id')->label('Category')
+                    ->options(fn () => AssetCategory::query()->get()->mapWithKeys(fn ($c) => [$c->id => $c->name])),
+                SelectFilter::make('branch_id')->label('Branch')
+                    ->options(fn () => Branch::query()->get()->mapWithKeys(fn ($b) => [$b->id => $b->name])),
+            ])
+            ->actions([EditAction::make(), DeleteAction::make()])
+            ->bulkActions([BulkActionGroup::make([DeleteBulkAction::make()])])
+            ->defaultSort('code', 'desc');
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListAssets::route('/'),
+            'create' => Pages\CreateAsset::route('/create'),
+            'edit' => Pages\EditAsset::route('/{record}/edit'),
+        ];
+    }
+}
