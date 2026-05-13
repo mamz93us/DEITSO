@@ -40,4 +40,36 @@ it('terminates an employee and soft-deletes the linked user', function () {
     // Linked user is soft-deleted (not visible by default).
     expect(User::find($userId))->toBeNull()
         ->and(User::withTrashed()->find($userId)->trashed())->toBeTrue();
+
+    // Original email is freed up — the soft-deleted row was renamed.
+    expect(User::withTrashed()->where('email', 'bob@term.test')->exists())->toBeFalse();
+});
+
+it('frees up the email address for re-hiring after termination', function () {
+    $org = Organization::create([
+        'slug' => 'rehire',
+        'name' => ['en' => 'Rehire Co'],
+        'status' => 'active',
+    ]);
+    (new RoleSeeder)->setContainer(app())->run();
+    app()->instance('current.organization', $org);
+
+    // First hire.
+    $first = app(CreateEmployee::class)($org->id, [
+        'email' => 'returning@rehire.test',
+        'first_name' => 'Returning',
+    ])['employee'];
+
+    app(TerminateEmployee::class)($first);
+
+    // Re-hire with the same email — should not collide with the soft-deleted user.
+    $second = app(CreateEmployee::class)($org->id, [
+        'email' => 'returning@rehire.test',
+        'first_name' => 'Returning',
+        'last_name' => 'Reborn',
+    ])['employee'];
+
+    expect($second)->toBeInstanceOf(Employee::class)
+        ->and($second->user->email)->toBe('returning@rehire.test')
+        ->and($second->id)->not->toBe($first->id);
 });

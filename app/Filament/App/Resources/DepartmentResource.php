@@ -57,7 +57,7 @@ class DepartmentResource extends Resource
                         ->options(fn ($livewire) => Department::query()
                             ->when($livewire->record ?? null, fn ($q, $rec) => $q->whereKeyNot($rec))
                             ->get()
-                            ->pluck('name', 'id'))
+                            ->mapWithKeys(fn ($d) => [$d->id => $d->name]))
                         ->searchable()
                         ->nullable()
                         ->columnSpanFull(),

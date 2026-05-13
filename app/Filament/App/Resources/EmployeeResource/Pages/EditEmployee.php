@@ -14,9 +14,12 @@ class EditEmployee extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        // Expose the linked user's email for display in the disabled email field.
-        if ($this->record?->user) {
-            $data['email'] = $this->record->user->email;
+        // Expose the linked user's email even if the user is soft-deleted
+        // (i.e. this employee has been terminated). withTrashed() bypasses
+        // the SoftDeletes scope so the email is still visible.
+        $user = $this->record?->user()->withTrashed()->first();
+        if ($user) {
+            $data['email'] = $user->email;
         }
 
         return $data;

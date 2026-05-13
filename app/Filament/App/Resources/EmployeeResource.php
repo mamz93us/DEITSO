@@ -112,14 +112,14 @@ class EmployeeResource extends Resource
                 ->schema([
                     Select::make('branch_id')
                         ->label('Branch')
-                        ->options(fn () => Branch::query()->pluck('name', 'id'))
+                        ->options(fn () => Branch::query()->get()->mapWithKeys(fn ($b) => [$b->id => $b->name]))
                         ->searchable()
                         ->nullable()
                         ->columnSpan(1),
 
                     Select::make('department_id')
                         ->label('Department')
-                        ->options(fn () => Department::query()->pluck('name', 'id'))
+                        ->options(fn () => Department::query()->get()->mapWithKeys(fn ($d) => [$d->id => $d->name]))
                         ->searchable()
                         ->nullable()
                         ->columnSpan(1),
@@ -200,10 +200,10 @@ class EmployeeResource extends Resource
                     ]),
                 SelectFilter::make('branch_id')
                     ->label('Branch')
-                    ->options(fn () => Branch::query()->pluck('name', 'id')),
+                    ->options(fn () => Branch::query()->get()->mapWithKeys(fn ($b) => [$b->id => $b->name])),
                 SelectFilter::make('department_id')
                     ->label('Department')
-                    ->options(fn () => Department::query()->pluck('name', 'id')),
+                    ->options(fn () => Department::query()->get()->mapWithKeys(fn ($d) => [$d->id => $d->name])),
             ])
             ->actions([
                 EditAction::make(),

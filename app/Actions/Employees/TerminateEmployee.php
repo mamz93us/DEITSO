@@ -31,7 +31,17 @@ class TerminateEmployee
                 ),
             ]);
 
-            $employee->user?->delete(); // soft delete
+            // Rename the email before soft-delete so the original address is
+            // freed up for re-hire. The DB unique constraint on users.email
+            // would otherwise block a new employee with the same address.
+            if ($user = $employee->user) {
+                $original = $user->email;
+                $user->forceFill([
+                    'email' => sprintf('terminated.%s.%s', $user->id, $original),
+                ])->save();
+
+                $user->delete(); // soft delete
+            }
 
             return $employee->fresh(['user']);
         });
