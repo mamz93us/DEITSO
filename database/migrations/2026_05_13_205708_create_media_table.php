@@ -13,7 +13,10 @@ return new class extends Migration
         Schema::create('media', function (Blueprint $table) {
             $table->id();
 
-            $table->morphs('model');
+            // ULID-friendly morphs.
+            $table->string('model_type');
+            $table->char('model_id', 26);
+            $table->index(['model_id', 'model_type'], 'media_model_id_model_type_index');
             $table->uuid()->nullable()->unique();
             $table->string('collection_name');
             $table->string('name');

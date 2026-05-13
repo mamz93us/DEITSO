@@ -6,6 +6,7 @@ use App\Http\Middleware\ApplyOrganizationBranding;
 use App\Http\Middleware\IdempotencyKey;
 use App\Http\Middleware\ResolveOrganizationFromHost;
 use App\Http\Middleware\SetActiveOrganization;
+use App\Http\Middleware\SetSpatieTeamContext;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -26,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'resolve.org' => ResolveOrganizationFromHost::class,
             'set.org' => SetActiveOrganization::class,
+            'team.context' => SetSpatieTeamContext::class,
             'apply.branding' => ApplyOrganizationBranding::class,
             'idempotency' => IdempotencyKey::class,
         ]);
@@ -33,12 +35,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             ResolveOrganizationFromHost::class,
             SetActiveOrganization::class,
+            SetSpatieTeamContext::class,
             ApplyOrganizationBranding::class,
         ]);
 
         $middleware->api(prepend: [
             ResolveOrganizationFromHost::class,
             SetActiveOrganization::class,
+            SetSpatieTeamContext::class,
             IdempotencyKey::class,
         ]);
     })
