@@ -61,7 +61,18 @@ class VisitResource extends Resource
                     DateTimePicker::make('scheduled_at')->required(),
                     Select::make('technician_user_id')
                         ->label('Technician')
-                        ->options(fn () => User::query()->orderBy('name')->limit(500)->pluck('name', 'id'))
+                        ->options(function () {
+                            $org = app()->bound('current.organization') ? app('current.organization') : null;
+                            if (! $org) {
+                                return [];
+                            }
+
+                            return User::query()
+                                ->whereHas('organizations', fn ($q) => $q->where('organizations.id', $org->id))
+                                ->orderBy('name')
+                                ->limit(500)
+                                ->pluck('name', 'id');
+                        })
                         ->searchable(),
                     Select::make('customer_branch_id')
                         ->label('Customer site')

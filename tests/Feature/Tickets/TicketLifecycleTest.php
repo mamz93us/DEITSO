@@ -39,6 +39,10 @@ function bootstrapTicketEnv(string $slug = 'tckco'): array
         'password' => bcrypt('x'), 'locale' => 'en', 'timezone' => 'UTC',
     ]);
 
+    // Both users belong to the org so AssignTicket's cross-tenant guard passes.
+    $org->users()->attach($requester->id, ['joined_at' => now(), 'is_default' => true]);
+    $org->users()->attach($tech->id, ['joined_at' => now(), 'is_default' => true]);
+
     return ['org' => $org, 'requester' => $requester, 'tech' => $tech];
 }
 

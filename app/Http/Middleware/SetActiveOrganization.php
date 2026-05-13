@@ -49,6 +49,23 @@ class SetActiveOrganization
             return $next($request);
         }
 
+        // Verify the authenticated user is actually a member of this org
+        // before binding. Defends against stale session values from cross-
+        // browser sessions or membership being revoked between requests.
+        if ($request->user() && ($request->user()->is_system_admin ?? false) !== true) {
+            $isMember = DB::table('organization_user')
+                ->where('user_id', $request->user()->getAuthIdentifier())
+                ->where('organization_id', $orgId)
+                ->exists();
+            if (! $isMember) {
+                if ($request->hasSession()) {
+                    $request->session()->forget('active_organization_id');
+                }
+
+                return $next($request);
+            }
+        }
+
         $org = DB::table('organizations')->where('id', $orgId)->first();
         if ($org) {
             app()->instance('current.organization', $org);

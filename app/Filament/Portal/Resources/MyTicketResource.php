@@ -42,8 +42,18 @@ class MyTicketResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
+        $q = parent::getEloquentQuery()
             ->where('requester_user_id', auth()->id());
+
+        // Belt-and-suspenders: also pin to the active org explicitly so a
+        // session-org-switch never reveals tickets from a different tenant
+        // (even though the global scope already filters by current.organization).
+        if (app()->bound('current.organization') && app('current.organization')) {
+            $orgId = app('current.organization')->id;
+            $q->where('tickets.organization_id', $orgId);
+        }
+
+        return $q;
     }
 
     public static function form(Form $form): Form

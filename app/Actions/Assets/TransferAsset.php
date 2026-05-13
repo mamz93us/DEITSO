@@ -11,6 +11,7 @@ use App\Models\States\AssetTransfer\Completed;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * Creates a new AssetTransfer in Draft state. The state can then be
@@ -26,6 +27,9 @@ class TransferAsset
 {
     public function create(Asset $asset, array $data): AssetTransfer
     {
+        $this->guardSameOrg('employees', $data['to_employee_id'] ?? null, $asset->organization_id, 'destination employee');
+        $this->guardSameOrg('branches', $data['to_branch_id'] ?? null, $asset->organization_id, 'destination branch');
+
         return AssetTransfer::create([
             'asset_id' => $asset->id,
             'organization_id' => $asset->organization_id,
@@ -81,5 +85,19 @@ class TransferAsset
                 'transferred_at' => Carbon::now(),
             ]);
         });
+    }
+
+    protected function guardSameOrg(string $table, ?string $id, string $orgId, string $label): void
+    {
+        if (! $id) {
+            return;
+        }
+        $ok = DB::table($table)
+            ->where('id', $id)
+            ->where('organization_id', $orgId)
+            ->exists();
+        if (! $ok) {
+            throw new RuntimeException("Cross-tenant {$label} reference rejected.");
+        }
     }
 }

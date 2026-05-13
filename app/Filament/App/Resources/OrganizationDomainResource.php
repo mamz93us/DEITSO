@@ -71,6 +71,7 @@ class OrganizationDomainResource extends Resource
                 ]),
 
             Section::make('Verification status')
+                ->description('These fields are system-controlled — only the verification job can promote a domain to "verified". Users cannot edit them.')
                 ->columns(2)
                 ->schema([
                     Select::make('dns_status')
@@ -79,7 +80,8 @@ class OrganizationDomainResource extends Resource
                             OrganizationDomain::DNS_VERIFIED => 'Verified',
                             OrganizationDomain::DNS_FAILED => 'Failed',
                         ])
-                        ->required()
+                        ->disabled()
+                        ->dehydrated(false)
                         ->native(false),
 
                     Select::make('tls_status')
@@ -89,7 +91,8 @@ class OrganizationDomainResource extends Resource
                             OrganizationDomain::TLS_ACTIVE => 'Active',
                             OrganizationDomain::TLS_FAILED => 'Failed',
                         ])
-                        ->required()
+                        ->disabled()
+                        ->dehydrated(false)
                         ->native(false),
 
                     TextInput::make('verification_token')

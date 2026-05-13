@@ -37,6 +37,13 @@ class CreateEmailAccount
             throw new RuntimeException('Email domain has no mail server linked.');
         }
 
+        // Cross-tenant guard: the mail server backing this domain MUST belong
+        // to the same org. A misconfigured domain pointing at another org's
+        // mail server would write API results into the wrong audit log.
+        if ($server->organization_id !== $domain->organization_id) {
+            throw new RuntimeException('Email domain and mail server belong to different organizations.');
+        }
+
         $result = $this->cpanel->createEmailAccount($server, $domain->domain, $localPart, $password, $quotaMb);
 
         // Failure: write the audit row OUTSIDE any transaction so it survives,

@@ -41,9 +41,10 @@ class WhatsappChannel
             $org = $this->resolveOrgFromNotifiable($notifiable);
         }
 
-        $settings = (array) ($org?->settings['green_api'] ?? []);
-        $idInstance = $settings['id_instance'] ?? null;
-        $apiToken = $settings['api_token'] ?? null;
+        $rawSettings = $org?->settings;
+        $settings = is_array($rawSettings) ? ($rawSettings['green_api'] ?? []) : [];
+        $idInstance = is_array($settings) ? ($settings['id_instance'] ?? null) : null;
+        $apiToken = is_array($settings) ? ($settings['api_token'] ?? null) : null;
 
         if (! $idInstance || ! $apiToken) {
             Log::info('whatsapp.skip — missing green_api credentials', [

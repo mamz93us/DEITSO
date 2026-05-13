@@ -29,16 +29,18 @@ class OrganizationDomain extends BaseModel
 
     public const TLS_FAILED = 'failed';
 
+    /**
+     * Note: dns_status, tls_status, verification_token, last_checked_at are
+     * deliberately NOT in fillable. They are system-controlled (verification
+     * job writes them via forceFill or update) — never user-editable. This
+     * blocks domain-hijack via mass assignment of dns_status=verified.
+     */
     protected $fillable = [
         'organization_id',
         'host',
         'type',
         'dns_provider_id',
-        'verification_token',
-        'dns_status',
-        'tls_status',
         'is_primary',
-        'last_checked_at',
     ];
 
     protected function casts(): array

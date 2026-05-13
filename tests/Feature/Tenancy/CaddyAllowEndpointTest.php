@@ -28,7 +28,6 @@ it('returns 404 for a domain that is only pending verification', function () {
         'organization_id' => $org->id,
         'host' => 'pending.example.com',
         'type' => OrganizationDomain::TYPE_CUSTOM,
-        'dns_status' => OrganizationDomain::DNS_PENDING,
     ]);
 
     $response = $this->get('/internal/domains/allow?domain=pending.example.com');
@@ -43,15 +42,41 @@ it('returns 200 for a verified host (Caddy will issue a cert)', function () {
         'status' => 'active',
     ]);
 
-    OrganizationDomain::create([
+    // dns_status and tls_status are NOT fillable — system-controlled fields.
+    // The verification job is the only legit writer; tests must use forceFill.
+    $domain = OrganizationDomain::create([
         'organization_id' => $org->id,
         'host' => 'verified.example.com',
         'type' => OrganizationDomain::TYPE_CUSTOM,
+    ]);
+    $domain->forceFill([
         'dns_status' => OrganizationDomain::DNS_VERIFIED,
         'tls_status' => OrganizationDomain::TLS_ACTIVE,
-    ]);
+    ])->save();
 
     $response = $this->get('/internal/domains/allow?domain=verified.example.com');
 
     $response->assertStatus(200);
+});
+
+it('returns 403 when not coming from an allowed IP and no token', function () {
+    // Override env so 127.0.0.1 is NOT in the allowlist.
+    config()->set('app.env', 'testing');
+    $oldAllowed = $_ENV['INTERNAL_ALLOWED_IPS'] ?? null;
+    $_ENV['INTERNAL_ALLOWED_IPS'] = '10.99.99.99';
+    $_ENV['INTERNAL_ROUTES_TOKEN'] = 'secret-token';
+
+    try {
+        $response = $this->get('/internal/domains/allow?domain=any');
+        $response->assertStatus(403);
+
+        // With the token, request goes through (and then 404s on missing host).
+        $response = $this->withHeaders(['X-Internal-Token' => 'secret-token'])
+            ->get('/internal/domains/allow?domain=any');
+        // 'any' doesn't match any domain → 404, but we passed the gate.
+        $response->assertStatus(404);
+    } finally {
+        $_ENV['INTERNAL_ALLOWED_IPS'] = $oldAllowed;
+        unset($_ENV['INTERNAL_ROUTES_TOKEN']);
+    }
 });

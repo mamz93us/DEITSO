@@ -28,6 +28,8 @@ it('schedules a visit with auto code VST-YYYY-0001', function () {
         'name' => 'T', 'email' => 't@v.test',
         'password' => bcrypt('x'), 'locale' => 'en', 'timezone' => 'UTC',
     ]);
+    // Tech must belong to the org for ScheduleVisit's cross-tenant guard.
+    $org->users()->attach($tech->id, ['joined_at' => now(), 'is_default' => true]);
 
     $v = app(ScheduleVisit::class)($org->id, [
         'type' => Visit::TYPE_OFFLINE,

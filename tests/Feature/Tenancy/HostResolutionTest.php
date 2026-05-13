@@ -42,14 +42,17 @@ it('resolves an organization via a verified custom domain', function () {
     ]);
 
     OrganizationDomain::withoutEvents(function () use ($org) {
-        OrganizationDomain::create([
+        $domain = OrganizationDomain::create([
             'organization_id' => $org->id,
             'host' => 'support.partner.com',
             'type' => OrganizationDomain::TYPE_CUSTOM,
-            'dns_status' => OrganizationDomain::DNS_VERIFIED,
-            'tls_status' => OrganizationDomain::TLS_ACTIVE,
             'is_primary' => true,
         ]);
+        // dns_status is system-controlled, not fillable.
+        $domain->forceFill([
+            'dns_status' => OrganizationDomain::DNS_VERIFIED,
+            'tls_status' => OrganizationDomain::TLS_ACTIVE,
+        ])->save();
     });
 
     $response = $this->get('http://support.partner.com/_tenancy/probe');
@@ -69,9 +72,9 @@ it('does not resolve a custom domain that is only pending verification', functio
         'organization_id' => $org->id,
         'host' => 'support.pendingco.com',
         'type' => OrganizationDomain::TYPE_CUSTOM,
-        'dns_status' => OrganizationDomain::DNS_PENDING,
         'is_primary' => true,
     ]);
+    // Default dns_status is DNS_PENDING via the migration default; no override needed.
 
     $response = $this->get('http://support.pendingco.com/_tenancy/probe');
 
