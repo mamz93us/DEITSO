@@ -9,6 +9,7 @@ use App\Filament\App\Resources\EmployeeResource\Pages;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Services\Reports\GenerateEmployeeAssetSummaryPdf;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Section;
@@ -207,6 +208,19 @@ class EmployeeResource extends Resource
             ])
             ->actions([
                 EditAction::make(),
+                Action::make('asset_summary')
+                    ->label('Asset summary PDF')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('gray')
+                    ->action(function (Employee $e) {
+                        $pdf = app(GenerateEmployeeAssetSummaryPdf::class)($e);
+
+                        return response()->streamDownload(
+                            fn () => print ($pdf->output()),
+                            'asset-summary-'.$e->code.'.pdf',
+                            ['Content-Type' => 'application/pdf'],
+                        );
+                    }),
                 Action::make('terminate')
                     ->icon('heroicon-o-no-symbol')
                     ->color('danger')

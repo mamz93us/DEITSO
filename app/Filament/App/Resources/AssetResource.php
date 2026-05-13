@@ -20,6 +20,7 @@ use App\Models\Employee;
 use App\Models\States\AssetTransfer\Approved;
 use App\Models\States\AssetTransfer\Pending;
 use App\Models\Supplier;
+use App\Services\Labels\GenerateAssetLabelPdf;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Section;
@@ -29,6 +30,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables\Actions\Action;
+use Filament\Tables\Actions\BulkAction;
 use Filament\Tables\Actions\BulkActionGroup;
 use Filament\Tables\Actions\DeleteAction;
 use Filament\Tables\Actions\DeleteBulkAction;
@@ -279,6 +281,19 @@ class AssetResource extends Resource
                         $svc->complete($transfer);
                     }),
 
+                Action::make('print_label')
+                    ->icon('heroicon-o-printer')
+                    ->color('gray')
+                    ->action(function (Asset $asset) {
+                        $pdf = app(GenerateAssetLabelPdf::class)->single($asset);
+
+                        return response()->streamDownload(
+                            fn () => print ($pdf->output()),
+                            'label-'.$asset->code.'.pdf',
+                            ['Content-Type' => 'application/pdf'],
+                        );
+                    }),
+
                 Action::make('scrap')
                     ->icon('heroicon-o-trash')
                     ->color('danger')
@@ -311,7 +326,24 @@ class AssetResource extends Resource
 
                 DeleteAction::make(),
             ])
-            ->bulkActions([BulkActionGroup::make([DeleteBulkAction::make()])])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    BulkAction::make('print_labels')
+                        ->label('Print labels (A4 sheet)')
+                        ->icon('heroicon-o-printer')
+                        ->action(function ($records) {
+                            $pdf = app(GenerateAssetLabelPdf::class)->sheet(collect($records));
+
+                            return response()->streamDownload(
+                                fn () => print ($pdf->output()),
+                                'asset-labels-'.now()->format('Y-m-d-Hi').'.pdf',
+                                ['Content-Type' => 'application/pdf'],
+                            );
+                        })
+                        ->deselectRecordsAfterCompletion(),
+                    DeleteBulkAction::make(),
+                ]),
+            ])
             ->defaultSort('code', 'desc');
     }
 
