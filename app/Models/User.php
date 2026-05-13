@@ -91,6 +91,7 @@ class User extends Authenticatable implements FilamentUser, HasName
         return match ($panel->getId()) {
             'system' => (bool) $this->is_system_admin,
             'app' => $this->organizations()->exists() || (bool) $this->is_system_admin,
+            'portal' => $this->organizations()->exists() || (bool) $this->is_system_admin,
             default => false,
         };
     }
