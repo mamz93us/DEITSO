@@ -1,0 +1,41 @@
+# Caddy Caddyfile for the IT Solutions Platform
+#
+# This is a PRODUCTION sketch. On Windows dev, use `php artisan serve` with
+# hosts-file entries instead.
+#
+# Caddy provisions Let's Encrypt certs automatically per-host using on-demand
+# TLS. The `ask` callback below tells Caddy to first call our app and ask
+# "is this host authorized?" — we only return 200 for hosts that have a
+# verified row in `organization_domains`.
+
+{
+    on_demand_tls {
+        # Caddy issues a GET to this URL with ?domain=<hostname>.
+        # Our app returns 200 if the host is allowed, 404/4xx otherwise.
+        ask https://app.it.deevar.cloud/internal/domains/allow
+    }
+
+    email ops@it.deevar.cloud
+}
+
+# Master platform domain — fixed cert (not on-demand).
+app.it.deevar.cloud {
+    reverse_proxy 127.0.0.1:9000
+}
+
+# Platform subdomains (e.g. acme.it.deevar.cloud) — on-demand TLS.
+*.it.deevar.cloud {
+    tls {
+        on_demand
+    }
+    reverse_proxy 127.0.0.1:9000
+}
+
+# Catch-all for custom client domains (e.g. support.clientco.com).
+# Caddy will call the ask callback for each unknown host.
+:443 {
+    tls {
+        on_demand
+    }
+    reverse_proxy 127.0.0.1:9000
+}
