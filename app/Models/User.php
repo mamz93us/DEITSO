@@ -43,6 +43,9 @@ class User extends Authenticatable implements FilamentUser, HasName
         'timezone',
         'last_login_at',
         'last_login_ip',
+        'notify_via_mail',
+        'notify_via_whatsapp',
+        'whatsapp_phone',
     ];
 
     protected $hidden = [
@@ -50,12 +53,27 @@ class User extends Authenticatable implements FilamentUser, HasName
         'remember_token',
     ];
 
+    /**
+     * Used by notification classes to decide whether to dispatch on a channel.
+     */
+    public function wantsChannel(string $channel): bool
+    {
+        return match ($channel) {
+            'mail' => (bool) ($this->notify_via_mail ?? true),
+            'whatsapp' => (bool) ($this->notify_via_whatsapp ?? false),
+            'database', 'broadcast' => true,
+            default => false,
+        };
+    }
+
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_system_admin' => 'boolean',
+            'notify_via_mail' => 'boolean',
+            'notify_via_whatsapp' => 'boolean',
             'last_login_at' => 'datetime',
         ];
     }

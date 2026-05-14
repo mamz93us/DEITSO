@@ -9,11 +9,15 @@ use App\Actions\Assets\AssignLicenseSeat;
 use App\Actions\Assets\RevokeAssetFromEmployee;
 use App\Actions\Employees\TerminateEmployee;
 use App\Models\Asset;
+use App\Models\EmployeeRequest;
 use App\Models\HrProcessTask;
 use App\Models\HrWorkflowTemplateTask;
+use App\Models\States\EmployeeRequest\Submitted;
+use App\Models\States\HrProcessTask\Blocked;
 use App\Models\States\HrProcessTask\Completed;
 use App\Models\States\HrProcessTask\Failed;
 use App\Models\States\HrProcessTask\InProgress;
+use App\Services\Codes\OrganizationScopedCodeGenerator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -62,6 +66,14 @@ class ExecuteTask
                     'completed_at' => now(),
                     'completed_by_user_id' => Auth::id(),
                 ]);
+            } catch (HrTaskBlockedException $e) {
+                // Soft failure — task is waiting on something to resolve, not Failed.
+                $task->update([
+                    'result' => array_merge(['blocked_reason' => $e->getMessage()], $e->context),
+                    'notes' => trim(($task->notes ?? '')."\nBlocked: ".$e->getMessage()),
+                ]);
+                $task->state->transitionTo(Blocked::class);
+                // Don't re-throw — Blocked is a normal outcome.
             } catch (Throwable $e) {
                 $task->update([
                     'result' => ['error' => $e->getMessage()],
@@ -92,8 +104,37 @@ class ExecuteTask
     protected function executeAssignAsset(HrProcessTask $task, array $data): array
     {
         $assetId = $data['asset_id'] ?? null;
+
+        // No asset chosen? Auto-spawn an EmployeeRequest of type new_asset
+        // and put this task into Blocked state — it'll resume when the request
+        // fulfils. (Per PROJECT.md Section 8.4: stuck-task detection.)
         if (! $assetId) {
-            throw new RuntimeException('assign_asset task requires asset_id in runtime data.');
+            $employee = $task->process->employee;
+            $request = EmployeeRequest::create([
+                'organization_id' => $task->process->organization_id,
+                'code' => app(OrganizationScopedCodeGenerator::class)->next(
+                    EmployeeRequest::class,
+                    $task->process->organization_id,
+                    prefix: 'REQ',
+                    padding: 4,
+                    year: (int) now()->format('Y'),
+                    yearReset: true,
+                ),
+                'requester_employee_id' => $employee->id,
+                'branch_id' => $employee->branch_id,
+                'type' => EmployeeRequest::TYPE_NEW_ASSET,
+                'title' => 'HR onboarding — '.($task->getTranslation('title', 'en') ?: 'new asset'),
+                'description' => 'Auto-spawned by HR process '.$task->process->code,
+                'urgency' => EmployeeRequest::URGENCY_HIGH,
+                'state' => Submitted::class,
+            ]);
+
+            $task->update(['linked_request_id' => $request->id]);
+            // Transition will happen in the caller; raise to signal Blocked.
+            throw new HrTaskBlockedException(
+                'No asset provided — spawned EmployeeRequest '.$request->code,
+                ['linked_request_id' => $request->id, 'request_code' => $request->code],
+            );
         }
 
         $asset = Asset::query()->withoutGlobalScopes()->findOrFail($assetId);

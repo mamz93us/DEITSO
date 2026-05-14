@@ -42,9 +42,15 @@ function bootstrapRequestEnv(string $slug = 'reqco'): array
         'tracking_mode' => AssetCategory::TRACKING_SERIALIZED,
     ]);
 
+    $mgrEmp = app(CreateEmployee::class)($org->id, [
+        'email' => 'mgr-emp@'.$slug.'.test',
+        'first_name' => 'MgrEmp',
+    ])['employee'];
+
     $emp = app(CreateEmployee::class)($org->id, [
         'email' => 'requester@'.$slug.'.test',
         'first_name' => 'Requester',
+        'manager_employee_id' => $mgrEmp->id,
     ])['employee'];
 
     $manager = User::create([
