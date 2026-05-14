@@ -4,18 +4,14 @@ declare(strict_types=1);
 
 namespace App\Filament\Portal\Resources;
 
-use App\Actions\Tickets\AddCommentToTicket;
 use App\Filament\Portal\Resources\MyTicketResource\Pages;
-use App\Filament\Portal\Resources\MyTicketResource\RelationManagers\PublicCommentsRelationManager;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
-use App\Models\TicketComment;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Actions\Action;
 use Filament\Tables\Columns\BadgeColumn;
@@ -95,31 +91,18 @@ class MyTicketResource extends Resource
                 TextColumn::make('created_at')->since(),
             ])
             ->actions([
-                Action::make('comment')
+                Action::make('open')
                     ->icon('heroicon-o-chat-bubble-left-right')
                     ->color('primary')
-                    ->form([
-                        Textarea::make('body')->required()->rows(3)->placeholder('Reply to support...'),
-                    ])
-                    ->action(function (Ticket $t, array $data) {
-                        app(AddCommentToTicket::class)(
-                            $t,
-                            auth()->user(),
-                            $data['body'],
-                            TicketComment::AUTHOR_END_USER,
-                            false,
-                        );
-                        Notification::make()->title('Comment posted')->success()->send();
-                    }),
+                    ->label('Open')
+                    ->url(fn (Ticket $t) => static::getUrl('view', ['record' => $t])),
             ])
             ->defaultSort('created_at', 'desc');
     }
 
     public static function getRelations(): array
     {
-        return [
-            PublicCommentsRelationManager::class,
-        ];
+        return [];
     }
 
     public static function getPages(): array

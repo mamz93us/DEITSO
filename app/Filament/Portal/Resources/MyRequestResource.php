@@ -5,7 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\Portal\Resources;
 
 use App\Filament\Portal\Resources\MyRequestResource\Pages;
+use App\Models\AssetCategory;
 use App\Models\EmployeeRequest;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -13,9 +19,9 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Read-only view of the requests this employee has raised. (Creation of new
- * requests in the portal lands in a later iteration; for now the org-side
- * EmployeeRequestResource handles request creation.)
+ * Self-service surface for the employee's own equipment / access requests.
+ * Creation is allowed — the CreateMyRequest page wires the SubmitRequest
+ * action and stamps the requester from the authenticated employee.
  */
 class MyRequestResource extends Resource
 {
@@ -36,14 +42,75 @@ class MyRequestResource extends Resource
             ->when(! $employee, fn ($q) => $q->whereRaw('1 = 0'));
     }
 
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            Section::make('New request')
+                ->description('Submit a request for new equipment, accessories, software or an upgrade. Your manager will review first.')
+                ->columns(2)
+                ->schema([
+                    Select::make('type')
+                        ->label('Request type')
+                        ->options([
+                            EmployeeRequest::TYPE_NEW_ASSET => 'New asset',
+                            EmployeeRequest::TYPE_NEW_ACCESSORY => 'New accessory',
+                            EmployeeRequest::TYPE_UPGRADE_EXISTING => 'Upgrade existing',
+                            EmployeeRequest::TYPE_NEW_LICENSE => 'New software license',
+                            EmployeeRequest::TYPE_OTHER => 'Other',
+                        ])
+                        ->default(EmployeeRequest::TYPE_NEW_ASSET)
+                        ->required()
+                        ->native(false),
+                    Select::make('urgency')
+                        ->options([
+                            EmployeeRequest::URGENCY_LOW => 'Low',
+                            EmployeeRequest::URGENCY_NORMAL => 'Normal',
+                            EmployeeRequest::URGENCY_HIGH => 'High',
+                            EmployeeRequest::URGENCY_URGENT => 'Urgent',
+                        ])
+                        ->default(EmployeeRequest::URGENCY_NORMAL)
+                        ->required()
+                        ->native(false),
+                    TextInput::make('title')
+                        ->required()
+                        ->maxLength(255)
+                        ->columnSpanFull()
+                        ->placeholder('e.g. New laptop for development work'),
+                    Select::make('category_id')
+                        ->label('Category (optional)')
+                        ->options(fn () => AssetCategory::query()->get()->mapWithKeys(fn ($c) => [$c->id => $c->name]))
+                        ->searchable()
+                        ->nullable(),
+                    TextInput::make('license_name')
+                        ->label('Software name')
+                        ->maxLength(255)
+                        ->visible(fn (callable $get) => $get('type') === EmployeeRequest::TYPE_NEW_LICENSE),
+                    Textarea::make('description')
+                        ->required()
+                        ->rows(4)
+                        ->columnSpanFull()
+                        ->placeholder('Describe what you need and why.'),
+                    Textarea::make('justification')
+                        ->label('Business justification (optional)')
+                        ->rows(2)
+                        ->columnSpanFull(),
+                ]),
+        ]);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('code')->badge(),
-                TextColumn::make('title')->limit(40),
-                BadgeColumn::make('type')->formatStateUsing(fn ($s) => str_replace('_', ' ', $s)),
-                BadgeColumn::make('urgency'),
+                TextColumn::make('code')->badge()->searchable(),
+                TextColumn::make('title')->limit(40)->searchable(),
+                BadgeColumn::make('type')->formatStateUsing(fn ($s) => str_replace('_', ' ', (string) $s)),
+                BadgeColumn::make('urgency')->colors([
+                    'gray' => EmployeeRequest::URGENCY_LOW,
+                    'primary' => EmployeeRequest::URGENCY_NORMAL,
+                    'warning' => EmployeeRequest::URGENCY_HIGH,
+                    'danger' => EmployeeRequest::URGENCY_URGENT,
+                ]),
                 BadgeColumn::make('state')->getStateUsing(fn (EmployeeRequest $r) => $r->state?->label() ?? '—'),
                 TextColumn::make('created_at')->since(),
             ])
@@ -54,11 +121,12 @@ class MyRequestResource extends Resource
     {
         return [
             'index' => Pages\ListMyRequests::route('/'),
+            'create' => Pages\CreateMyRequest::route('/create'),
         ];
     }
 
     public static function canCreate(): bool
     {
-        return false;
+        return auth()->user()?->employee !== null;
     }
 }
