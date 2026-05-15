@@ -39,6 +39,7 @@ class User extends Authenticatable implements FilamentUser, HasName
         'email',
         'password',
         'is_system_admin',
+        'is_technician',
         'locale',
         'timezone',
         'last_login_at',
@@ -72,6 +73,7 @@ class User extends Authenticatable implements FilamentUser, HasName
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_system_admin' => 'boolean',
+            'is_technician' => 'boolean',
             'notify_via_mail' => 'boolean',
             'notify_via_whatsapp' => 'boolean',
             'last_login_at' => 'datetime',
@@ -81,7 +83,7 @@ class User extends Authenticatable implements FilamentUser, HasName
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'email', 'is_system_admin', 'locale', 'timezone'])
+            ->logOnly(['name', 'email', 'is_system_admin', 'is_technician', 'locale', 'timezone'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -108,6 +110,7 @@ class User extends Authenticatable implements FilamentUser, HasName
     {
         return match ($panel->getId()) {
             'system' => (bool) $this->is_system_admin,
+            'technician' => (bool) $this->is_technician || (bool) $this->is_system_admin,
             'app' => $this->organizations()->exists() || (bool) $this->is_system_admin,
             'portal' => $this->organizations()->exists() || (bool) $this->is_system_admin,
             default => false,

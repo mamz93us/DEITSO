@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Providers\Filament;
 
-use App\Filament\Portal\Pages\Dashboard;
 use App\Http\Middleware\ApplyOrganizationBranding;
 use App\Http\Middleware\ResolveOrganizationFromHost;
 use App\Http\Middleware\SetActiveOrganization;
@@ -13,9 +12,11 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -24,23 +25,24 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
- * End-user portal at /portal. Branded per-org. Surface area is intentionally
- * narrow: My Tickets / My Requests / My Assets / Profile. All resources are
- * filtered to the authenticated user's own data.
+ * Technician panel at /technician. Access requires `is_technician = true` (or
+ * `is_system_admin = true`). Technicians are cross-tenant by design — they
+ * service many organizations' tickets, visits, and requests from a single pane.
  *
- * Access is granted to any authenticated user who is a member of an
- * organization — gated by User::canAccessPanel('portal').
+ * The OrganizationScope explicitly treats technicians as a span-all-orgs
+ * context (same as system admins), so resources here can use the standard
+ * Eloquent query and still see every org's data.
  */
-class PortalPanelProvider extends PanelProvider
+class TechnicianPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
         return $panel
-            ->id('portal')
-            ->path('portal')
+            ->id('technician')
+            ->path('technician')
             ->login()
             ->colors([
-                'primary' => Color::Teal,
+                'primary' => Color::Cyan,
                 'info' => Color::Sky,
                 'success' => Color::Emerald,
                 'warning' => Color::Amber,
@@ -48,11 +50,16 @@ class PortalPanelProvider extends PanelProvider
                 'gray' => Color::Slate,
             ])
             ->font('Inter')
-            ->brandName('Self-service portal')
-            ->discoverResources(in: app_path('Filament/Portal/Resources'), for: 'App\\Filament\\Portal\\Resources')
-            ->discoverPages(in: app_path('Filament/Portal/Pages'), for: 'App\\Filament\\Portal\\Pages')
-            ->pages([Dashboard::class])
-            ->discoverWidgets(in: app_path('Filament/Portal/Widgets'), for: 'App\\Filament\\Portal\\Widgets')
+            ->brandName('Technician Workbench')
+            ->discoverResources(in: app_path('Filament/Technician/Resources'), for: 'App\\Filament\\Technician\\Resources')
+            ->discoverPages(in: app_path('Filament/Technician/Pages'), for: 'App\\Filament\\Technician\\Pages')
+            ->pages([
+                Pages\Dashboard::class,
+            ])
+            ->discoverWidgets(in: app_path('Filament/Technician/Widgets'), for: 'App\\Filament\\Technician\\Widgets')
+            ->widgets([
+                Widgets\AccountWidget::class,
+            ])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -69,7 +76,9 @@ class PortalPanelProvider extends PanelProvider
                 ApplyOrganizationBranding::class,
                 'throttle:filament-auth',
             ])
-            ->authMiddleware([Authenticate::class])
+            ->authMiddleware([
+                Authenticate::class,
+            ])
             ->sidebarCollapsibleOnDesktop();
     }
 }

@@ -13,4 +13,9 @@ class CreateDepartment extends CreateRecord
     use Translatable;
 
     protected static string $resource = DepartmentResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }

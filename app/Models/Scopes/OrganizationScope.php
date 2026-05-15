@@ -15,10 +15,14 @@ use Illuminate\Support\Facades\Auth;
  * Contract:
  *   - current.organization bound to an org row → filter by that org_id.
  *   - current.organization bound to null AND the authenticated user is a system
- *     admin (or there is no authenticated user — CLI/console) → no filter
- *     applied (span-all-orgs).
+ *     admin OR technician (or there is no authenticated user — CLI/console) →
+ *     no filter applied (span-all-orgs).
  *   - current.organization bound to null AND the authenticated user is NOT a
- *     system admin → defensive filter `1=0` (return zero rows).
+ *     system admin or technician → defensive filter `1=0` (return zero rows).
+ *
+ * Technicians are cross-tenant by design (a single tech may service many client
+ * orgs), so they get the same span-all-orgs treatment as system admins when
+ * acting in their own panel (`/technician`) where no org is bound.
  *
  * This last case is the security backstop: if an org-scoped user reaches a
  * tenant query without an org context (e.g. middleware misconfiguration),
@@ -45,8 +49,11 @@ class OrganizationScope implements Scope
         // Unbound or null. Allow the query through (no filter) ONLY for:
         //   - unauthenticated / CLI context  (Auth::check() === false)
         //   - authenticated system admin
+        //   - authenticated technician (cross-tenant by design)
         $user = Auth::user();
-        $isSystemContext = ! $user || ($user->is_system_admin ?? false) === true;
+        $isSystemContext = ! $user
+            || ($user->is_system_admin ?? false) === true
+            || ($user->is_technician ?? false) === true;
 
         if ($isSystemContext) {
             return;

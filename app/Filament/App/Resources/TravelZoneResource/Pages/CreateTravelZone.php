@@ -10,4 +10,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateTravelZone extends CreateRecord
 {
     protected static string $resource = TravelZoneResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }

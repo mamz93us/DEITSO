@@ -39,8 +39,14 @@ class AppPanelProvider extends PanelProvider
             ->path('app')
             ->login()
             ->colors([
-                'primary' => Color::Blue,
+                'primary' => Color::Indigo,
+                'info' => Color::Sky,
+                'success' => Color::Emerald,
+                'warning' => Color::Amber,
+                'danger' => Color::Rose,
+                'gray' => Color::Slate,
             ])
+            ->font('Inter')
             ->brandName('IT Solutions Platform')
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\\Filament\\App\\Resources')
             ->discoverPages(in: app_path('Filament/App/Pages'), for: 'App\\Filament\\App\\Pages')

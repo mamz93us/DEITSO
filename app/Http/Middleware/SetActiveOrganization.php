@@ -52,9 +52,16 @@ class SetActiveOrganization
         // Verify the authenticated user is actually a member of this org
         // before binding. Defends against stale session values from cross-
         // browser sessions or membership being revoked between requests.
-        if ($request->user() && ($request->user()->is_system_admin ?? false) !== true) {
+        // System admins and technicians span tenants, so the membership
+        // check doesn't apply to them.
+        $user = $request->user();
+        $spansAllOrgs = $user
+            && (($user->is_system_admin ?? false) === true
+                || ($user->is_technician ?? false) === true);
+
+        if ($user && ! $spansAllOrgs) {
             $isMember = DB::table('organization_user')
-                ->where('user_id', $request->user()->getAuthIdentifier())
+                ->where('user_id', $user->getAuthIdentifier())
                 ->where('organization_id', $orgId)
                 ->exists();
             if (! $isMember) {
@@ -116,11 +123,14 @@ class SetActiveOrganization
             return null;
         }
 
-        // System admins without explicit membership stay unbound — the
-        // OrganizationScope treats unbound as "system context".
-        if (($user->is_system_admin ?? false) === true) {
-            // Still try to bind their default membership if they have one
-            // (system admins occasionally also belong to a particular org).
+        // System admins and technicians span all orgs by default — they remain
+        // unbound unless they explicitly select an org. Both still get an
+        // explicit `is_default` membership bound when one exists so the App
+        // panel can scope correctly when they switch into a tenant context.
+        $spansAllOrgs = ($user->is_system_admin ?? false) === true
+            || ($user->is_technician ?? false) === true;
+
+        if ($spansAllOrgs) {
             $orgId = DB::table('organization_user')
                 ->where('user_id', $user->getAuthIdentifier())
                 ->where('is_default', true)

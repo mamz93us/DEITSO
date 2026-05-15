@@ -13,4 +13,9 @@ class CreateBranch extends CreateRecord
     use Translatable;
 
     protected static string $resource = BranchResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }

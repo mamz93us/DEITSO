@@ -38,8 +38,14 @@ class SystemPanelProvider extends PanelProvider
             ->path('system')
             ->login()
             ->colors([
-                'primary' => Color::Slate,
+                'primary' => Color::Violet,
+                'info' => Color::Sky,
+                'success' => Color::Emerald,
+                'warning' => Color::Amber,
+                'danger' => Color::Rose,
+                'gray' => Color::Slate,
             ])
+            ->font('Inter')
             ->brandName('Platform · System')
             ->discoverResources(in: app_path('Filament/System/Resources'), for: 'App\\Filament\\System\\Resources')
             ->discoverPages(in: app_path('Filament/System/Pages'), for: 'App\\Filament\\System\\Pages')

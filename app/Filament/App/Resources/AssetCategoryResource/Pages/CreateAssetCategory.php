@@ -13,4 +13,9 @@ class CreateAssetCategory extends CreateRecord
     use Translatable;
 
     protected static string $resource = AssetCategoryResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }
