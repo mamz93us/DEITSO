@@ -59,6 +59,7 @@ class PortalPanelProvider extends PanelProvider
                 SetActiveOrganization::class,
                 SetSpatieTeamContext::class,
                 ApplyOrganizationBranding::class,
+                'throttle:filament-auth',
             ])
             ->authMiddleware([Authenticate::class])
             ->sidebarCollapsibleOnDesktop();

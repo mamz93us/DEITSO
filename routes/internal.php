@@ -15,11 +15,12 @@ use Illuminate\Support\Facades\Schema;
 | Endpoints called by infrastructure (Caddy on-demand TLS ask callback,
 | health probes, etc.).
 |
-| Defence in depth — three layers:
-|   1. Shared secret in the X-Internal-Token header (env INTERNAL_ROUTES_TOKEN).
-|   2. IP allowlist from env INTERNAL_ALLOWED_IPS (CSV, supports CIDR via str start).
+| Defence in depth — four layers:
+|   1. Per-IP throttle (60 req/min) via `throttle:internal-callback`.
+|   2. Shared secret in the X-Internal-Token header (env INTERNAL_ROUTES_TOKEN).
+|   3. IP allowlist from env INTERNAL_ALLOWED_IPS (CSV, supports CIDR via str start).
 |      Defaults to 127.0.0.1 only.
-|   3. The endpoint itself only confirms verified domain — leaks nothing else.
+|   4. The endpoint itself only confirms verified domain — leaks nothing else.
 |
 | Production deployment: set INTERNAL_ROUTES_TOKEN to a long random string and
 | pass it via Caddy's `header_up X-Internal-Token "$INTERNAL_ROUTES_TOKEN"` on
@@ -55,4 +56,4 @@ Route::get('/internal/domains/allow', function (Request $request) {
         ->exists();
 
     return response($exists ? 'ok' : 'no', $exists ? 200 : 404);
-});
+})->middleware('throttle:internal-callback');

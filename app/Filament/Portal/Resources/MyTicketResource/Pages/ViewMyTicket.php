@@ -37,13 +37,15 @@ class ViewMyTicket extends Page implements HasForms
      */
     public array $data = [];
 
-    public function mount(string $record): void
+    public function mount(Ticket $record): void
     {
-        $this->record = Ticket::query()
-            ->where('id', $record)
-            ->where('requester_user_id', auth()->id())
-            ->firstOrFail();
+        // Livewire's URL-to-property hydration resolves `{record}` to a Ticket
+        // model via Eloquent (global OrganizationScope applies, so cross-tenant
+        // tickets 404 here). We re-verify ownership explicitly because
+        // resolveRouteBinding does not run the resource's getEloquentQuery.
+        abort_unless($record->requester_user_id === auth()->id(), 404);
 
+        $this->record = $record;
         $this->form->fill();
     }
 

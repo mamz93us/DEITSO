@@ -170,4 +170,4 @@
         </div>
     </body>
 </html>
-<?php /**PATH C:\Users\MohamedZahran\Downloads\DEITAM\resources\views/welcome.blade.php ENDPATH**/ ?>
+<?php /**PATH C:\Users\MohamedZahran\Downloads\DEITAM\DEITAM\resources\views/welcome.blade.php ENDPATH**/ ?>

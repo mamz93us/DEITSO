@@ -1,66 +1,78 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# DEITAM — IT Solutions Platform
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A multi-tenant **ITSM / MSP** platform for IT service companies in MENA. Web app
+built on Laravel 11 + Filament 3, with per-organization branding, automatic SSL,
+HR workflows, asset lifecycle, ticketing, field-service visits, and cPanel /
+WhatsApp integrations.
 
-## About Laravel
+> **Single source of truth:** [PROJECT.md](PROJECT.md) — mission, modules, data
+> models, workflow specs, sprint plan, coding standards.
+> **Working with Claude on this repo:** [CLAUDE.md](CLAUDE.md) — codified
+> conventions (tenancy, actions, secrets, testing) that AI contributors must
+> follow.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- PHP 8.3, Laravel 11
+- Filament 3 (admin panels at `/app` and `/system`; portal at `/portal`)
+- MySQL 8 / MariaDB 10.6+ · Redis (cache, queue, sessions) · Meilisearch
+- Caddy v2 (on-demand TLS per client hostname)
+- Laravel Horizon · Laravel Reverb · Laravel Sanctum
+- Pest / PHPUnit · Pint
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Getting started
 
-## Learning Laravel
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+# fill in DB_*, REDIS_*, GODADDY_*, INTERNAL_ROUTES_TOKEN, MAIL_*
+php artisan migrate --seed
+npm install && npm run build
+php artisan serve            # http://localhost:8000/app
+php artisan horizon          # queue worker + dashboard at /horizon
+php artisan reverb:start     # websockets (optional in dev)
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+Three Filament entry points after seeding:
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+- `/system` — platform admins (`is_system_admin = true`)
+- `/app`    — organization admins/staff (org-scoped)
+- `/portal` — end users (per-org, read-only self-service)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Quality gates
 
-## Laravel Sponsors
+| Command | What it checks |
+|---|---|
+| `vendor/bin/pint --test` | PSR-12 + `declare(strict_types=1)`, import ordering, unused imports |
+| `vendor/bin/pest` | Feature + unit suite (in-memory SQLite) |
+| `composer audit --no-dev` | Known-vulnerable runtime dependencies |
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+CI (`.github/workflows/ci.yml`) runs all three on `push` and `pull_request` to
+`main` / `develop`.
 
-### Premium Partners
+## Security
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+- Tenant isolation: every tenant-scoped model uses the `BelongsToOrganization`
+  trait → `OrganizationScope` global scope. Org binding is established by
+  `SetActiveOrganization` middleware and verified per-request (stale sessions
+  are rejected).
+- Auth: bcrypt cost 12. Login/password-reset are rate-limited per IP via the
+  named limiter `filament-auth` (`app/Providers/AppServiceProvider.php`).
+- Secrets: all third-party credentials are encrypted at rest via Laravel's
+  `encrypted` cast (AES-256-CBC, keyed off `APP_KEY`). Never log decrypted
+  values; the `activitylog` trait uses `logOnly([...])` whitelists.
+- Caddy on-demand TLS callback is gated by token + IP allowlist + throttle (see
+  [routes/internal.php](routes/internal.php)).
+
+Report vulnerabilities privately — do not file public issues.
 
 ## Contributing
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+PRs against `develop` only. Match the action-based pattern under
+`app/Actions/<Module>/<VerbNoun>.php`. CI must be green; new business logic
+needs Pest coverage. Read [CLAUDE.md](CLAUDE.md) before touching tenancy code.
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Proprietary. © DEITAM.
